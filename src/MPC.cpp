@@ -5,10 +5,6 @@
 
 using CppAD::AD;
 
-// TODO: Set the timestep length and duration
-size_t N = 10;
-double dt = 0.05;
-
 // This value assumes the model presented in the classroom is used.
 //
 // It was obtained by measuring the radius formed by running the vehicle in the
@@ -39,7 +35,7 @@ size_t delta_start = epsi_start + N;
 size_t a_start = delta_start + N - 1;
 
 class FG_eval {
- public:
+ public:  
   // Fitted polynomial coefficients
   Eigen::VectorXd coeffs;
   FG_eval(Eigen::VectorXd coeffs) { this->coeffs = coeffs; };
@@ -52,8 +48,8 @@ class FG_eval {
 
     // The part of the cost based on the reference state.
     for (int t = 0; t < N; t++) {
-      fg[0] += CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 20*CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 20*CppAD::pow(vars[epsi_start + t], 2);
       fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
 
@@ -66,7 +62,7 @@ class FG_eval {
     // Minimize the value gap between sequential actuations.
     for (int t = 0; t < N - 2; t++) {
       fg[0] += 200*CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += 200  *CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 10*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     //
@@ -74,7 +70,11 @@ class FG_eval {
     //
     // NOTE: In this section you'll setup the model constraints.
 
-    // Initial constraints
+    // Initial constraints to keep previous steeering and lag
+
+
+
+
     //
     // We add 1 to each of the starting indices due to cost being located at
     // index 0 of `fg`.
@@ -108,8 +108,8 @@ class FG_eval {
       AD<double> delta0 = vars[delta_start + t - 1];
       AD<double> a0 = vars[a_start + t - 1];
 
-      AD<double> f0 = coeffs[0] + coeffs[1] * x0;
-      AD<double> psides0 = CppAD::atan(coeffs[1]);
+      AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * CppAD::pow(x0, 2);
+      AD<double> psides0 = CppAD::atan(coeffs[1] + 2 * coeffs[2] * x0);
 
       // Here's `x` to get you started.
       // The idea here is to constraint this value to be 0.
@@ -125,7 +125,7 @@ class FG_eval {
       fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
       fg[1 + psi_start + t] = psi1 - (psi0 + v0 * delta0 / Lf * dt);
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
-      fg[1 + cte_start + t] =
+      fg[1 + cte_start + t] = 
           cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
       fg[1 + epsi_start + t] =
           epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
@@ -136,10 +136,15 @@ class FG_eval {
 //
 // MPC class definition implementation.
 //
-MPC::MPC() {};
+MPC::MPC() {
+  solution_struct_.x.assign(N-1, 0);
+  solution_struct_.y.assign(N-1, 0);
+  solution_struct_.delta.assign(N-1, 0);
+  solution_struct_.a.assign(N-1, 0);
+};
 MPC::~MPC() {};
 
-mpc_solution MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
+void MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   bool ok = true;
   size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
@@ -214,6 +219,17 @@ mpc_solution MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
     constraints_upperbound[i] = 0;
   }
 
+
+  // account for lag
+  for (int i = 0; i < lag_N; i++) {
+    vars_lowerbound[delta_start + i] = solution_struct_.delta[i];
+    vars_upperbound[delta_start + i] = solution_struct_.delta[i];
+
+    vars_lowerbound[a_start + i] = solution_struct_.a[i];
+    vars_upperbound[a_start + i] = solution_struct_.a[i];
+  }
+
+  //initial conditions
   constraints_lowerbound[x_start] = x;
   constraints_lowerbound[y_start] = y;
   constraints_lowerbound[psi_start] = psi;
@@ -267,12 +283,11 @@ mpc_solution MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   auto cost = solution.obj_value;
   std::cout << "Cost " << cost << std::endl;
 
-  mpc_solution solution_struct;
-  for (int i=1; i<N-1; i++){
-    solution_struct.x.push_back(solution.x[x_start+i]);
-    solution_struct.y.push_back(solution.x[y_start+i]);
-    solution_struct.delta.push_back(solution.x[delta_start+i]);
-    solution_struct.a.push_back(solution.x[a_start+i]);
+  for (int i=0; i<N-1; i++){
+    solution_struct_.x[i] = solution.x[x_start+i];
+    solution_struct_.y[i] = solution.x[y_start+i];
+    solution_struct_.delta[i] = solution.x[delta_start+i];
+    solution_struct_.a[i] = solution.x[a_start+i];
   }
-  return solution_struct;
+  std::cout << "finished computing cost";
 };
