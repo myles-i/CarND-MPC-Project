@@ -1,57 +1,53 @@
 
 ## My Project Reflections
-The Model Predictive Controller (MPC) succesfully maneuvers the vehicle around the track following the waypoints. A video of the MPC driving the vehicle around the track can be found here:
-https://youtu.be/pTl6FehfqYA
-
+The Model Predictive Controller (MPC) succesfully maneuvers the vehicle around the track following the waypoints. A video of the MPC driving the vehicle around the track can be found here:  
+https://youtu.be/pTl6FehfqYA  
+  
 # The Model
-The model used in this model predictive controller includes the following states:
--x (x position)
--y (y position)
--psi (orientation)
--v (velocity)
+The model used in this model predictive controller includes the following states:  
+-x (x position)  
+-y (y position)  
+-psi (orientation)  
+-v (velocity)  
 
-This state is then propogated by the control inputs of the steering angle and throttle values as follows:
-x1 = (x0 + v0 * cos(psi0) * dt);
-y1 = (y0 + v0 * sin(psi0) * dt);
-psi1 = (psi0 + v0 * delta0 / Lf * dt);
-v1 = (v0 + a0 * dt);
-
-Where Lf is the is the between the front of the car and its center of gravity, dt is the time between controller updates, a0 is the throttle value, and delta0 is the steering angle. 
-
+This state is then propogated by the control inputs of the steering angle and throttle values as follows:  
+x1 = (x0 + v0 * cos(psi0) * dt);  
+y1 = (y0 + v0 * sin(psi0) * dt);  
+psi1 = (psi0 + v0 * delta0 / Lf * dt);  
+v1 = (v0 + a0 * dt);  
+  
+Where Lf is the is the between the front of the car and its center of gravity, dt is the time between controller updates, a0 is the throttle value, and delta0 is the steering angle.   
+  
+The cross-track error and orientation errors are updated as follows:  
+cte1 = ((f0 - y0) + (v0 * sin(epsi0) * dt));  
+epsi1 = ((psi0 - psides0) + v0 * delta0 / Lf * dt);  
+  
+These update equations are all implemented on lines 124-131 of MPC.cpp.  
+  
+The steering angle is limited between plus and minus 25 degrees, and the throttle is limited between plus and minus 1. This is limited in lines 201-210 of MPC.cpp.  
+  
 The cross-track error and orientation errors are updated as follows:
 cte1 = ((f0 - y0) + (v0 * sin(epsi0) * dt));
-epsi1 = ((psi0 - psides0) + v0 * delta0 / Lf * dt);
-
-
-These update equations are all implemented on lines 124-131 of MPC.cpp.
-
-The steering angle is limited between plus and minus 25 degrees, and the throttle is limited between plus and minus 1. This is limited in lines 201-210 of MPC.cpp.
-
-The cross-track error and orientation errors are updated as follows:
-cte1 = ((f0 - y0) + (v0 * sin(epsi0) * dt));
-epsi1 = ((psi0 - psides0) + v0 * delta0 / Lf * dt);
-
-
+epsi1 = ((psi0 - psides0) + v0 * delta0 / Lf * dt);  
 
 # Timestep and Elapsed Duration
-Through trial and error, I determined that a timestep (dt) of 0.1 second with a horizon of 1 second (N = 10) works pretty well. This also aligns with roughly the amount of latency in the system, which means the latency implementation is easy.
+Through trial and error, I determined that a timestep (dt) of 0.1 second with a horizon of 1 second (N = 10) works pretty well. This also aligns with roughly the amount of latency in the system, which means the latency implementation is easy.  
 
 # Polynomial Fitting and MPC Preprocessing
-The lake_track_waypoints.csv file provides the waypoints for the car to follow, but in order to interpolate between these for the optimizer, I fit a 3rd order polynomial to the waypoints. However, before doing so, I transformed these points from the global frame of reference to the vehicle fixed frame of reference. This frame of reference has the x direction facing forward. The coordinate transformation between the global and vehicle frame is as follows:
-veh_x[i] = (pts_x[i] - px)*cos(-psi) - (pts_y[i] - py)*sin(-psi);
-veh_y[i] = (pts_x[i] - px)*sin(-psi) + (pts_y[i] - py)*cos(-psi);
+The lake_track_waypoints.csv file provides the waypoints for the car to follow, but in order to interpolate between these for the optimizer, I fit a 3rd order polynomial to the waypoints. However, before doing so, I transformed these points from the global frame of reference to the vehicle fixed frame of reference. This frame of reference has the x direction facing forward. The coordinate transformation between the global and vehicle frame is as follows:  
+veh_x[i] = (pts_x[i] - px)*cos(-psi) - (pts_y[i] - py)*sin(-psi);  
+veh_y[i] = (pts_x[i] - px)*sin(-psi) + (pts_y[i] - py)*cos(-psi);  
+  
+Where pts_x/y are the points of interest, (px,py) is the location of the vehicle, and psi is the orientation of the vehicle. This can be found on lines 102-107 of main.cpp.  
 
-Where pts_x/y are the points of interest, (px,py) is the location of the vehicle, and psi is the orientation of the vehicle. This can be found on lines 102-107 of main.cpp.
-
-Once transformed, the 3rd order polynomial was fit to the on line 111 of main.cpp. Finally, the initial crosstrack error (cte) and orientation error (epsi) were computed using this polynomial. Some simplification is possible because the vehicle is at x=0, particularly for orientation error, which is the negative atan of the derivative of the polynomial evaulated at 0, which is just the first coefficient. This is computed on lines  114 and 117 of
-cte = polyeval(coeffs, 0);
-epsi = -atan(coeffs[1]);
-
-
-Finally, once the optimal solution is computed, I apply an average of the first three steering inputs as the control input, and the first of the throttle inputs. The steering value, in radians, is converted to a value between -1 and 1 for the unity simulator by dividing by converting to degrees and dividing by 25 (or the total fo dividing by .46332).This is on lines 127-136 of main.cpp
+Once transformed, the 3rd order polynomial was fit to the on line 111 of main.cpp. Finally, the initial crosstrack error (cte) and orientation error (epsi) were computed using this polynomial. Some simplification is possible because the vehicle is at x=0, particularly for orientation error, which is the negative atan of the derivative of the polynomial evaulated at 0, which is just the first coefficient. This is computed on lines  114 and 117 of main.cpp  
+cte = polyeval(coeffs, 0);  
+epsi = -atan(coeffs[1]);  
+  
+Finally, once the optimal solution is computed, I apply an average of the first three steering inputs as the control input, and the first of the throttle inputs. The steering value, in radians, is converted to a value between -1 and 1 for the unity simulator by dividing by converting to degrees and dividing by 25 (or the total fo dividing by .46332).This is on lines 127-136 of main.cpp.  
 
 # Model Predictive Control with Latency
-In order to address the 100ms of latency in the system, the model predictive controller assumes that the previous optimal control output is applied for the first 100ms of its prediction horizon. This is implemented by applying an equality constraint on the control inputs for the first timestep. This can be seen on lines 222 to 229 of MPC.cpp
+In order to address the 100ms of latency in the system, the model predictive controller assumes that the previous optimal control output is applied for the first 100ms of its prediction horizon. This is implemented by applying an equality constraint on the control inputs for the first timestep. This can be seen on lines 222 to 229 of MPC.cpp.  
 
 
 ## Original README:
