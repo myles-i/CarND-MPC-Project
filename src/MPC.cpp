@@ -19,7 +19,7 @@ const double Lf = 2.67;
 
 // Both the reference cross track and orientation errors are 0.
 // The reference velocity is set to 40 mph.
-double ref_v = 20;
+double ref_v = 30;
 
 
 // The solver takes all the state variables and actuator
@@ -55,14 +55,14 @@ class FG_eval {
 
     // Minimize the use of actuators.
     for (int t = 0; t < N - 1; t++) {
-      fg[0] += 5*CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += 50*CppAD::pow(vars[delta_start + t], 2);
       fg[0] += 5*CppAD::pow(vars[a_start + t], 2);
     }
 
     // Minimize the value gap between sequential actuations.
-    for (int t = 0; t < N - 2; t++) {
+    for (int t = 0; t < N - 2 ; t++) {
       fg[0] += 200*CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += 10*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 200*CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     //
@@ -108,8 +108,8 @@ class FG_eval {
       AD<double> delta0 = vars[delta_start + t - 1];
       AD<double> a0 = vars[a_start + t - 1];
 
-      AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * CppAD::pow(x0, 2);
-      AD<double> psides0 = CppAD::atan(coeffs[1] + 2 * coeffs[2] * x0);
+      AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * CppAD::pow(x0, 2) + coeffs[3] * CppAD::pow(x0, 3);
+      AD<double> psides0 = CppAD::atan(coeffs[1] + 2 * coeffs[2] * x0 + 3*coeffs[3]*CppAD::pow(x0, 2));
 
       // Here's `x` to get you started.
       // The idea here is to constraint this value to be 0.
@@ -204,7 +204,6 @@ void MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   }
 
   // Acceleration/decceleration upper and lower limits.
-  // NOTE: Feel free to change this to something else.
   for (int i = a_start; i < n_vars; i++) {
     vars_lowerbound[i] = -1.0;
     vars_upperbound[i] = 1.0;

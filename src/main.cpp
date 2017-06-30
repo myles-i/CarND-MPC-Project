@@ -108,13 +108,13 @@ int main() {
 
 
             // Compute coeffs
-          auto coeffs = polyfit(ptsx_veh, ptsy_veh, 2);
+          auto coeffs = polyfit(ptsx_veh, ptsy_veh, 3);
 
           //cte is polynomial evaluated at zero because already transformed to vehicle frame
           double cte = polyeval(coeffs, 0); 
           // since points in vehicle frame, cte is equal to the atan(derivative  of polynomial evaluated at 0),
           // which is the exactly equal to the atan of the first coefficient
-          double epsi = atan(coeffs[1]); 
+          double epsi = -atan(coeffs[1]); 
 
 
           //Initial state has x,y, and epsi at zero since we transformed to vehicle frame
@@ -124,7 +124,15 @@ int main() {
 
           mpc.Solve(state, coeffs);
 
-          double steer_value = -mpc.solution_struct_.delta[lag_N]/0.436332;
+          double steer_value = 0;
+          int n_avg = 3;
+          for (int i = 0; i < n_avg; i++)
+          {
+            steer_value += mpc.solution_struct_.delta[lag_N+i];
+          }
+          steer_value = steer_value/n_avg;
+
+          steer_value = -steer_value/0.436332;
           double throttle_value = mpc.solution_struct_.a[lag_N];
 
           json msgJson;
